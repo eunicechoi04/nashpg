@@ -11,3 +11,6 @@ mag_coef: 0.2
 mag_divergence_type: "kl"
 num_inner_update: 1000
 num_outer_update: 50
+use_ema: false
+ema_tau: 0.001
+ema_update_freq: 1

@@ -1,0 +1,26 @@
+
+=== Summary Statistics ===
+
+Baseline:
+  Final raw exploitability: -0.008923
+  Final true exploitability: 0.000000
+  Min raw exploitability: -0.009471
+  Max raw exploitability: 0.459785
+
+EMA τ=0.001:
+  Final raw exploitability: -0.005501
+  Final true exploitability: 0.000000
+  Min raw exploitability: -0.013684
+  Max raw exploitability: 0.459785
+
+EMA τ=0.005:
+  Final raw exploitability: 0.006817
+  Final true exploitability: 0.000000
+  Min raw exploitability: -0.010280
+  Max raw exploitability: 0.459785
+
+EMA τ=0.02:
+  Final raw exploitability: 0.015680
+  Final true exploitability: 0.000000
+  Min raw exploitability: -0.008030
+  Max raw exploitability: 0.459785

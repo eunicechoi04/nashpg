@@ -1,0 +1,11 @@
+#!/bin/bash
+# Training script for Kuhn Poker - Baseline (no EMA)
+
+uv run train/nash_pg.py \
+    agent=kuhn_poker \
+    env=kuhn_poker \
+    algorithm.use_ema=false \
+    algorithm.num_inner_update=1000 \
+    algorithm.num_outer_update=50 \
+    run_name="kuhn_poker/nash_pg/baseline_no_ema" \
+    seed=100

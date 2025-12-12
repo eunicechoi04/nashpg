@@ -1,0 +1,13 @@
+#!/bin/bash
+# Training script for Kuhn Poker - EMA with tau=0.02
+
+uv run train/nash_pg.py \
+    agent=kuhn_poker \
+    env=kuhn_poker \
+    algorithm.use_ema=true \
+    algorithm.ema_tau=0.02 \
+    algorithm.ema_update_freq=1 \
+    algorithm.num_inner_update=1000 \
+    algorithm.num_outer_update=50 \
+    run_name="kuhn_poker/nash_pg/ema_tau_002" \
+    seed=100

@@ -31,6 +31,33 @@ from train.core import collect_and_process_trajectories, update_agent
 from train.loggers import create_logger, BaseLogger
 
 
+def apply_ema_update(mag_agent: BaseAgent, agent: BaseAgent, tau: float) -> None:
+    """
+    Update the magnetic agent (reference network) using Exponential Moving Average in-place.
+
+    EMA formula: mag_params = (1 - tau) * mag_params + tau * agent_params
+
+    Args:
+        mag_agent: The reference network to update (modified in-place)
+        agent: The current training agent
+        tau: The EMA coefficient (smaller = slower update)
+    """
+    # Get the graphdef and state for both agents
+    mag_graphdef, mag_state = nnx.split(mag_agent)
+    agent_graphdef, agent_state = nnx.split(agent)
+
+    # Update mag_state using EMA
+    def ema_update(mag_param, agent_param):
+        if isinstance(mag_param, jax.Array):
+            return (1.0 - tau) * mag_param + tau * agent_param
+        return mag_param
+
+    updated_mag_state = jax.tree_util.tree_map(ema_update, mag_state, agent_state)
+
+    # Update mag_agent in-place
+    nnx.update(mag_agent, updated_mag_state)
+
+
 
 @chex.dataclass
 class LearnerState:
@@ -42,6 +69,7 @@ class LearnerState:
     train_metrics: nnx.MultiMetric
     rollout_metrics: nnx.MultiMetric
     mag_agent: Optional[BaseAgent] # use for regularization
+    ema_step_count: int = 0  # track steps for EMA updates
 
 
 @partial(nnx.jit, static_argnames=('env', 'config'))
@@ -88,6 +116,18 @@ def single_training_step(
         num_ppo_epoch = config.algorithm.num_ppo_epoch,
         only_use_player0_experience = False,
     )
+
+    """apply EMA update to mag_agent if enabled"""
+    if config.algorithm.use_ema:
+        # Increment step count
+        learner_state.ema_step_count += 1
+        # Apply EMA update every step (ema_update_freq is always 1 in our configs)
+        # Note: Updated in-place to maintain object identity for nnx.scan
+        apply_ema_update(
+            learner_state.mag_agent,
+            learner_state.agent,
+            config.algorithm.ema_tau
+        )
 
     return learner_state, None
 
@@ -201,8 +241,9 @@ def main(config: DictConfig):
                 if config.logging.save_interval > 0 and cur_num_update % config.logging.save_interval == 0:
                     learner_state.agent.save_checkpoint(Path(config.logging.checkpoint_dir).resolve() / config.run_name, step=cur_num_update)
 
-            # update magnet
-            learner_state.mag_agent = nnx.clone(learner_state.agent)
+            # update magnet (only if not using EMA - EMA updates happen every step)
+            if not config.algorithm.use_ema:
+                learner_state.mag_agent = nnx.clone(learner_state.agent)
 
 
     # close logger
