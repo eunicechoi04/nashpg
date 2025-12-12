@@ -11,3 +11,10 @@ mag_coef: 0.2
 mag_divergence_type: "kl"
 num_inner_update: 1000
 num_outer_update: 50
+
+# Warmup schedule parameters for Method A (Fixed α with Warmup Schedule)
+alpha_schedule_type: "none"  # Options: "none", "linear", "exponential", "cosine"
+alpha_high: 0.4              # Initial regularization (used when schedule is active)
+alpha_target: 0.2            # Final regularization target (defaults to mag_coef if not using schedule)
+T_warmup: 10                 # Number of warmup iterations (outer loop iterations)
+lambda_exp: 0.2              # Lambda parameter for exponential decay

@@ -132,12 +132,16 @@ def update_agent(
         residual_var = masked_var(dataset.target_value - values, dataset.valid_mask)
         explained_var = jnp.maximum(1 - residual_var / (target_var + 1e-8), jnp.float32(0))
 
+        # Regularization term (alpha * mag_kl)
+        reg_term = mag_coef * mag_kl
+
         metrics.update(
             actor_loss = actor_loss,
             ppo_loss = ppo_loss,
             critic_loss=critic_loss,
             entropy = -entropy_loss,
             mag_kl = mag_kl,
+            reg_term = reg_term,
             approx_kl = approx_kl,
             clip_frac = clip_frac,
             explained_var = explained_var
@@ -146,10 +150,68 @@ def update_agent(
         return total_loss
 
 
+    def calculate_ppo_loss_only(agent: BaseAgent, dataset: train_types.Dataset) -> chex.Numeric:
+        """Calculate PPO loss only (for gradient norm computation)"""
+        dists = agent.get_action_distribution(dataset.observation, dataset.action_mask)
+        log_prob = dists.log_prob(dataset.action)
+
+        # normalize advantage using valid mask
+        advantage_mean = masked_mean(dataset.advantage, dataset.valid_mask)
+        advantage_std = masked_std(dataset.advantage, dataset.valid_mask)
+        normalized_advantage = (dataset.advantage - advantage_mean) / (advantage_std + 1e-8)
+
+        log_ratio = log_prob - dataset.log_prob
+        ratio = jnp.exp(log_ratio)
+        ppo_loss1 = ratio * normalized_advantage
+        ppo_loss2 = jnp.clip(ratio, 1.0 - clip_eps, 1.0 + clip_eps) * normalized_advantage
+        ppo_loss = -masked_mean(jnp.minimum(ppo_loss1, ppo_loss2), dataset.valid_mask)
+
+        return ppo_loss
+
+    def calculate_reg_loss_only(agent: BaseAgent, dataset: train_types.Dataset) -> chex.Numeric:
+        """Calculate regularization loss only (for gradient norm computation)"""
+        if mag_agent is None:
+            return jnp.float32(0.0)
+
+        dists = agent.get_action_distribution(dataset.observation, dataset.action_mask)
+        mag_dists = mag_agent.get_action_distribution(dataset.observation, dataset.action_mask)
+
+        if mag_divergence_type == "kl":
+            mag_kl = masked_mean(dists.kl_divergence(mag_dists), dataset.valid_mask)
+        elif mag_divergence_type == "l2":
+            probs = dists.probs
+            mag_probs = mag_dists.probs
+            mag_kl = 0.5 * masked_mean(jnp.sum(jnp.square(probs - mag_probs), axis=-1), dataset.valid_mask)
+
+        return mag_coef * mag_kl
+
+    def compute_grad_norm(grads) -> chex.Numeric:
+        """Compute L2 norm of gradients"""
+        grad_squares = jax.tree.map(lambda x: jnp.sum(jnp.square(x)), grads)
+        total_grad_square = jax.tree.reduce(lambda x, y: x + y, grad_squares)
+        return jnp.sqrt(total_grad_square)
+
     def update_batch(carry: UpdateState, batch: train_types.Dataset):
         """Update the agent for a single batch"""
         # compute the gradient
         grad = nnx.grad(calculate_n_log_loss)(carry.agent, batch, carry.metrics)
+
+        # compute gradient norms for policy and regularization separately
+        grad_policy = nnx.grad(calculate_ppo_loss_only)(carry.agent, batch)
+        grad_reg = nnx.grad(calculate_reg_loss_only)(carry.agent, batch)
+
+        grad_norm_policy = compute_grad_norm(grad_policy)
+        grad_norm_reg = compute_grad_norm(grad_reg)
+
+        # compute ratio of gradient norms (avoid division by zero)
+        ratio_grad_norms = grad_norm_policy / jnp.maximum(grad_norm_reg, 1e-10)
+
+        # log gradient norm metrics
+        carry.metrics.update(
+            grad_norm_policy=grad_norm_policy,
+            grad_norm_reg=grad_norm_reg,
+            ratio_grad_norms=ratio_grad_norms
+        )
 
         # update agent, optimizer state (inplace update)
         carry.optimizer.update(grad)

@@ -18,6 +18,7 @@ logging.getLogger('absl').setLevel(logging.WARNING)
 from functools import partial
 from tqdm import tqdm
 import jax
+import jax.numpy as jnp
 from flax import nnx
 import chex
 import optax
@@ -31,6 +32,51 @@ from train.core import collect_and_process_trajectories, update_agent
 from train.loggers import create_logger, BaseLogger
 
 
+def compute_alpha_t(
+    t: int,
+    schedule_type: str,
+    alpha_high: float,
+    alpha_target: float,
+    T_warmup: int,
+    lambda_exp: float = 0.2
+) -> float:
+    """
+    Compute the regularization coefficient (alpha) for the current outer iteration.
+
+    Args:
+        t: Current outer iteration (0-indexed)
+        schedule_type: Type of schedule ("none", "linear", "exponential", "cosine")
+        alpha_high: Initial regularization value
+        alpha_target: Final regularization target value
+        T_warmup: Number of warmup iterations
+        lambda_exp: Lambda parameter for exponential decay
+
+    Returns:
+        Computed alpha value for this iteration
+    """
+    if schedule_type == "none":
+        return alpha_target
+
+    if t >= T_warmup:
+        return alpha_target
+
+    if schedule_type == "linear":
+        # Linear warmup: α_t = α_high - (α_high - α_target) * (t / T_warmup)
+        alpha_t = alpha_high - (alpha_high - alpha_target) * (t / T_warmup)
+
+    elif schedule_type == "exponential":
+        # Exponential warmup: α_t = α_target + (α_high - α_target) * exp(-λt)
+        alpha_t = alpha_target + (alpha_high - alpha_target) * jnp.exp(-lambda_exp * t)
+
+    elif schedule_type == "cosine":
+        # Cosine annealing: α_t = α_target + 0.5 * (α_high - α_target) * (1 + cos(πt/T_warmup))
+        alpha_t = alpha_target + 0.5 * (alpha_high - alpha_target) * (1 + jnp.cos(jnp.pi * t / T_warmup))
+
+    else:
+        raise ValueError(f"Unknown schedule_type: {schedule_type}. Must be one of: 'none', 'linear', 'exponential', 'cosine'")
+
+    return float(alpha_t)
+
 
 @chex.dataclass
 class LearnerState:
@@ -42,6 +88,7 @@ class LearnerState:
     train_metrics: nnx.MultiMetric
     rollout_metrics: nnx.MultiMetric
     mag_agent: Optional[BaseAgent] # use for regularization
+    alpha_t: float # current regularization coefficient (for warmup schedule)
 
 
 @partial(nnx.jit, static_argnames=('env', 'config'))
@@ -81,7 +128,7 @@ def single_training_step(
         metrics = learner_state.train_metrics,
         key = update_key,
         ent_coef = config.algorithm.ent_coef,
-        mag_coef = config.algorithm.mag_coef,
+        mag_coef = learner_state.alpha_t,  # Use alpha_t from learner_state instead of fixed mag_coef
         mag_divergence_type = config.algorithm.mag_divergence_type,
         clip_eps = config.algorithm.clip_eps,
         num_minibatches = config.algorithm.num_minibatches,
@@ -109,10 +156,13 @@ def training_step(
 
 def log_metrics(learner_state: LearnerState, logger: BaseLogger, cur_num_update: int):
     """Log training and rollout metrics"""
-    
-    train_metrics = learner_state.train_metrics.compute() 
+
+    train_metrics = learner_state.train_metrics.compute()
     rollout_metrics = learner_state.rollout_metrics.compute()
-    
+
+    # Add alpha_t to train metrics for tracking the warmup schedule
+    train_metrics['alpha_t'] = learner_state.alpha_t
+
     # Log train metrics
     logger.log_train_metrics(train_metrics, cur_num_update)
 
@@ -151,6 +201,10 @@ def main(config: DictConfig):
         critic_loss = nnx.metrics.Average("critic_loss"),
         approx_kl = nnx.metrics.Average("approx_kl"),
         mag_kl = nnx.metrics.Average("mag_kl"),
+        reg_term = nnx.metrics.Average("reg_term"),
+        grad_norm_policy = nnx.metrics.Average("grad_norm_policy"),
+        grad_norm_reg = nnx.metrics.Average("grad_norm_reg"),
+        ratio_grad_norms = nnx.metrics.Average("ratio_grad_norms"),
         clip_frac = nnx.metrics.Average("clip_frac"),
         explained_var = nnx.metrics.Average("explained_var"),
     )
@@ -161,6 +215,17 @@ def main(config: DictConfig):
 
     # setup learner state
     key, learner_key = jax.random.split(key)
+
+    # Initialize alpha_t (regularization coefficient)
+    initial_alpha_t = compute_alpha_t(
+        t=0,
+        schedule_type=config.algorithm.alpha_schedule_type,
+        alpha_high=config.algorithm.alpha_high,
+        alpha_target=config.algorithm.alpha_target,
+        T_warmup=config.algorithm.T_warmup,
+        lambda_exp=config.algorithm.lambda_exp
+    )
+
     learner_state = LearnerState(
         key=learner_key,
         env_state=env_state,
@@ -170,6 +235,7 @@ def main(config: DictConfig):
         train_metrics=train_metrics,
         rollout_metrics=rollout_metrics,
         mag_agent=nnx.clone(agent), # init as the same
+        alpha_t=initial_alpha_t,
     )
 
     # setup logger
@@ -184,6 +250,16 @@ def main(config: DictConfig):
     # training loop
     with tqdm(total=config.algorithm.num_inner_update * config.algorithm.num_outer_update, desc="Training") as pbar:
         for cur_num_outer_update in range(0, config.algorithm.num_outer_update):
+            # Compute alpha_t for this outer iteration (Method A: Fixed α with Warmup Schedule)
+            learner_state.alpha_t = compute_alpha_t(
+                t=cur_num_outer_update,
+                schedule_type=config.algorithm.alpha_schedule_type,
+                alpha_high=config.algorithm.alpha_high,
+                alpha_target=config.algorithm.alpha_target,
+                T_warmup=config.algorithm.T_warmup,
+                lambda_exp=config.algorithm.lambda_exp
+            )
+
             for cur_num_inner_update in range(0, config.algorithm.num_inner_update, config.logging.log_interval):
                 cur_num_update = cur_num_outer_update * config.algorithm.num_inner_update + cur_num_inner_update
                 
