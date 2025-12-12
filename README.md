@@ -38,7 +38,6 @@ uv run train/nash_pg.py \
     env={env_name} \
     run_name="{env_name}/nash_pg"
 ```
-
 ### Magnetic Mirror Descent [[MMD](https://openreview.net/pdf?id=DpE5UYUQzZH#page=1.40)]
 ```bash
 uv run train/mmd.py \

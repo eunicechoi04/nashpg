@@ -18,6 +18,7 @@ logging.getLogger('absl').setLevel(logging.WARNING)
 from functools import partial
 from tqdm import tqdm
 import jax
+import jax.numpy as jnp
 from flax import nnx
 import chex
 import optax
@@ -42,6 +43,7 @@ class LearnerState:
     train_metrics: nnx.MultiMetric
     rollout_metrics: nnx.MultiMetric
     mag_agent: Optional[BaseAgent] # use for regularization
+    mag_coef: float # adaptive KL penalty coefficient
 
 
 @partial(nnx.jit, static_argnames=('env', 'config'))
@@ -81,7 +83,7 @@ def single_training_step(
         metrics = learner_state.train_metrics,
         key = update_key,
         ent_coef = config.algorithm.ent_coef,
-        mag_coef = config.algorithm.mag_coef,
+        mag_coef = learner_state.mag_coef,  # Use adaptive mag_coef from learner_state
         mag_divergence_type = config.algorithm.mag_divergence_type,
         clip_eps = config.algorithm.clip_eps,
         num_minibatches = config.algorithm.num_minibatches,
@@ -107,14 +109,52 @@ def training_step(
     return learner_state
 
 
+def update_adaptive_mag_coef(learner_state: LearnerState, config: DictConfig) -> LearnerState:
+    """
+    Update mag_coef based on observed KL divergence (Adaptive KL Penalty from PPO).
+    
+    If KL > target_kl: penalty too weak → increase mag_coef
+    If KL < target_kl: penalty too strong → decrease mag_coef
+    """
+    if not config.algorithm.adaptive_kl_penalty:
+        return learner_state
+    
+    # Get current KL divergence from metrics
+    train_metrics = learner_state.train_metrics.compute()
+    current_kl = train_metrics.get('mag_kl', 0.0)
+    
+    target_kl = config.algorithm.target_kl
+    adjustment_factor = config.algorithm.kl_adjustment_factor
+    min_mag_coef = config.algorithm.min_mag_coef
+    max_mag_coef = config.algorithm.max_mag_coef
+    
+    # Adjust mag_coef based on KL divergence
+    if current_kl > target_kl:
+        # KL too high → increase penalty
+        new_mag_coef = learner_state.mag_coef * adjustment_factor
+    else:
+        # KL too low → decrease penalty
+        new_mag_coef = learner_state.mag_coef / adjustment_factor
+    
+    # Clamp to valid range
+    new_mag_coef = jnp.clip(new_mag_coef, min_mag_coef, max_mag_coef)
+    
+    # Update learner state with new coefficient
+    learner_state.mag_coef = float(new_mag_coef)
+    
+    return learner_state
+
+
 def log_metrics(learner_state: LearnerState, logger: BaseLogger, cur_num_update: int):
     """Log training and rollout metrics"""
     
     train_metrics = learner_state.train_metrics.compute() 
     rollout_metrics = learner_state.rollout_metrics.compute()
     
-    # Log train metrics
-    logger.log_train_metrics(train_metrics, cur_num_update)
+    # Log train metrics (including mag_coef for adaptive KL penalty tracking)
+    train_metrics_with_mag_coef = dict(train_metrics)
+    train_metrics_with_mag_coef['mag_coef'] = learner_state.mag_coef
+    logger.log_train_metrics(train_metrics_with_mag_coef, cur_num_update)
 
     # Process and log rollout metrics
     eps_len = 1 / rollout_metrics['inverse_eps_len']
@@ -170,6 +210,7 @@ def main(config: DictConfig):
         train_metrics=train_metrics,
         rollout_metrics=rollout_metrics,
         mag_agent=nnx.clone(agent), # init as the same
+        mag_coef=config.algorithm.mag_coef,  # Initialize adaptive mag_coef
     )
 
     # setup logger
@@ -196,6 +237,9 @@ def main(config: DictConfig):
 
                 # logging
                 log_metrics(learner_state, logger, cur_num_update)
+                
+                # update adaptive mag_coef based on KL divergence
+                learner_state = update_adaptive_mag_coef(learner_state, config)
 
                 # save model
                 if config.logging.save_interval > 0 and cur_num_update % config.logging.save_interval == 0:
