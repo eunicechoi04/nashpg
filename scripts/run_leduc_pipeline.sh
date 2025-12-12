@@ -10,6 +10,19 @@
 
 set -e
 
+# Helper function to format time duration
+format_duration() {
+    local seconds=$1
+    local minutes=$((seconds / 60))
+    local secs=$((seconds % 60))
+    printf "%dm %ds" $minutes $secs
+}
+
+# Time estimates (in seconds)
+EXPECTED_TRAIN_TIME=180
+EXPECTED_EXPLOIT_TIME=900
+
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -60,8 +73,8 @@ format_duration() {
 
 # Function to run training in background
 run_training() {
-    local exp=$1
-    local name=$2
+    exp=$1
+    name=$2
 
     TRAIN_START_TIME[$exp]=$(date +%s)
     echo -e "${BLUE}[TRAIN]${NC} Starting: $name (ETA: $(format_duration $EXPECTED_TRAIN_TIME))"
@@ -77,8 +90,8 @@ run_training() {
 
 # Function to run exploitability in background
 run_exploit() {
-    local exp=$1
-    local name=$2
+    exp=$1
+    name=$2
 
     EXPLOIT_START_TIME[$exp]=$(date +%s)
     echo -e "${YELLOW}[EXPLOIT]${NC} Starting: $name (ETA: $(format_duration $EXPECTED_EXPLOIT_TIME))"
@@ -107,8 +120,8 @@ print_status() {
     echo "=========================================="
 
     for i in "${!EXPERIMENTS[@]}"; do
-        local exp="${EXPERIMENTS[$i]}"
-        local name="${NAMES[$i]}"
+        exp="${EXPERIMENTS[$i]}"
+        name="${NAMES[$i]}"
 
         local train_status="${TRAIN_STATUS[$exp]}"
         local exploit_status="${EXPLOIT_STATUS[$exp]:-pending}"
@@ -118,7 +131,7 @@ print_status() {
 
         # Calculate training time info
         if [ "$train_status" == "done" ] && [ -n "${TRAIN_END_TIME[$exp]}" ]; then
-            local duration=$((TRAIN_END_TIME[$exp] - TRAIN_START_TIME[$exp]))
+            duration=$((TRAIN_END_TIME[$exp] - TRAIN_START_TIME[$exp]))
             train_info="✓ ($(format_duration $duration))"
         elif [ "$train_status" == "running" ] && [ -n "${TRAIN_START_TIME[$exp]}" ]; then
             local elapsed=$((now - TRAIN_START_TIME[$exp]))
@@ -129,7 +142,7 @@ print_status() {
 
         # Calculate exploit time info
         if [ "$exploit_status" == "done" ] && [ -n "${EXPLOIT_END_TIME[$exp]}" ]; then
-            local duration=$((EXPLOIT_END_TIME[$exp] - EXPLOIT_START_TIME[$exp]))
+            duration=$((EXPLOIT_END_TIME[$exp] - EXPLOIT_START_TIME[$exp]))
             exploit_info="✓ ($(format_duration $duration))"
         elif [ "$exploit_status" == "running" ] && [ -n "${EXPLOIT_START_TIME[$exp]}" ]; then
             local elapsed=$((now - EXPLOIT_START_TIME[$exp]))
@@ -196,13 +209,17 @@ while [ "$all_done" = false ]; do
         if [ "${TRAIN_STATUS[$exp]}" == "running" ]; then
             all_done=false
             if ! is_running ${TRAIN_PIDS[$exp]}; then
+                set +e
                 wait ${TRAIN_PIDS[$exp]}
+                exit_code=$?
+                set -e
+
                 exit_code=$?
 
                 TRAIN_END_TIME[$exp]=$(date +%s)
                 if [ $exit_code -eq 0 ]; then
                     TRAIN_STATUS[$exp]="done"
-                    local duration=$((TRAIN_END_TIME[$exp] - TRAIN_START_TIME[$exp]))
+                    duration=$((TRAIN_END_TIME[$exp] - TRAIN_START_TIME[$exp]))
                     echo -e "${GREEN}✓ [TRAIN]${NC} ${TRAIN_NAMES[$exp]} completed successfully! ($(format_duration $duration))"
 
                     # Immediately launch exploitability computation
@@ -221,13 +238,16 @@ while [ "$all_done" = false ]; do
         if [ "${EXPLOIT_STATUS[$exp]}" == "running" ]; then
             all_done=false
             if ! is_running ${EXPLOIT_PIDS[$exp]}; then
+                set +e
                 wait ${EXPLOIT_PIDS[$exp]}
+                exit_code=$?
+                set -e
                 exit_code=$?
 
                 EXPLOIT_END_TIME[$exp]=$(date +%s)
                 if [ $exit_code -eq 0 ]; then
                     EXPLOIT_STATUS[$exp]="done"
-                    local duration=$((EXPLOIT_END_TIME[$exp] - EXPLOIT_START_TIME[$exp]))
+                    duration=$((EXPLOIT_END_TIME[$exp] - EXPLOIT_START_TIME[$exp]))
                     echo -e "${GREEN}✓ [EXPLOIT]${NC} ${TRAIN_NAMES[$exp]} completed successfully! ($(format_duration $duration))"
                 else
                     EXPLOIT_STATUS[$exp]="failed"
@@ -284,8 +304,8 @@ echo ""
 if [ $failure_count -gt 0 ]; then
     echo "Failed experiments:"
     for i in "${!EXPERIMENTS[@]}"; do
-        local exp="${EXPERIMENTS[$i]}"
-        local name="${NAMES[$i]}"
+        exp="${EXPERIMENTS[$i]}"
+        name="${NAMES[$i]}"
 
         if [ "${TRAIN_STATUS[$exp]}" != "done" ] || [ "${EXPLOIT_STATUS[$exp]}" != "done" ]; then
             echo "  - $name (Train: ${TRAIN_STATUS[$exp]}, Exploit: ${EXPLOIT_STATUS[$exp]})"

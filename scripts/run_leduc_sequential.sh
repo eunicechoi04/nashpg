@@ -5,6 +5,33 @@
 # Slower than parallel but uses less GPU memory and is easier to debug
 
 set -e
+# ==============================
+# Force CPU-only execution
+# ==============================
+
+# Disable CUDA / GPU visibility
+export CUDA_VISIBLE_DEVICES=""
+
+# JAX: force CPU backend
+export JAX_PLATFORM_NAME=cpu
+export JAX_PLATFORMS=cpu
+export XLA_PYTHON_CLIENT_PREALLOCATE=false
+export XLA_FLAGS="--xla_force_host_platform_device_count=1"
+
+# PyTorch: avoid CUDA checks
+export TORCH_USE_CUDA_DSA=0
+
+# Limit CPU thread explosion (important!)
+export OMP_NUM_THREADS=4
+export MKL_NUM_THREADS=4
+export OPENBLAS_NUM_THREADS=4
+export NUMEXPR_NUM_THREADS=4
+
+echo "Running on CPU only"
+echo "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
+echo "JAX_PLATFORM_NAME=$JAX_PLATFORM_NAME"
+echo ""
+
 
 # Colors for output
 RED='\033[0;31m'
