@@ -1,0 +1,33 @@
+agent:
+  agent_name: leduc_poker
+env:
+  env_name: leduc_poker
+algorithm:
+  lr: 0.0003
+  ent_coef: 0.05
+  clip_eps: 0.2
+  num_envs: 32
+  num_steps: 128
+  gamma: 1.0
+  gae_gamma: 0.95
+  num_minibatches: 4
+  num_ppo_epoch: 4
+  mag_coef: 0.2
+  mag_divergence_type: kl
+  num_inner_update: 1000
+  num_outer_update: 50
+  use_ema: true
+  ema_tau: 0.02
+  ema_update_freq: 1
+logging:
+  log_interval: 10
+  save_interval: 1000
+  checkpoint_dir: ./checkpoints
+  tensorboard:
+    enabled: true
+    log_dir: runs/${run_name}
+  json:
+    enabled: true
+    log_file: logs/${run_name}.json
+run_name: leduc_poker/nash_pg/ema_tau_002
+seed: 100

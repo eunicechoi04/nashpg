@@ -1,0 +1,8 @@
+- agent=kuhn_poker
+- env=kuhn_poker
+- algorithm.use_ema=true
+- algorithm.ema_tau=0.001
+- algorithm.num_inner_update=10
+- algorithm.num_outer_update=1
+- run_name=test_ema
+- seed=100

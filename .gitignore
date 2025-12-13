@@ -10,9 +10,3 @@ wheels/
 .pytest_cache
 .env
 uv.lock
-
-# experiment results
-runs/
-outputs/
-data/
-checkpoints/
