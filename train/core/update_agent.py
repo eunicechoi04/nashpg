@@ -13,7 +13,8 @@ from flax import nnx
 class UpdateState:
     agent: BaseAgent
     optimizer: nnx.Optimizer
-    metrics: nnx.MultiMetric
+    loss_metrics: nnx.MultiMetric
+    grad_metrics: nnx.MultiMetric
     key: chex.PRNGKey
 
 @partial(nnx.jit, static_argnames=('num_minibatches', 'num_ppo_epoch', 'only_use_player0_experience', 'mag_divergence_type'))
@@ -22,7 +23,8 @@ def update_agent(
     mag_agent: BaseAgent,
     optimizer: nnx.Optimizer,
     dataset: train_types.Dataset,  # shape (batch_size, ...)
-    metrics: nnx.MultiMetric,
+    loss_metrics: nnx.MultiMetric,
+    grad_metrics: nnx.MultiMetric,
     key: chex.PRNGKey,
     ent_coef: float,
     mag_coef: float,
@@ -31,7 +33,7 @@ def update_agent(
     num_ppo_epoch: int,
     only_use_player0_experience: bool,
     mag_divergence_type: Literal["kl", "l2"] = "kl",
-) -> Tuple[BaseAgent, nnx.Optimizer, nnx.MultiMetric]:
+) -> Tuple[BaseAgent, nnx.Optimizer, nnx.MultiMetric, nnx.MultiMetric]:
     """
     Updates agent parameters using PPO with optional magnetic regularization.
     
@@ -77,9 +79,9 @@ def update_agent(
     
 
     def calculate_n_log_loss(
-        agent: BaseAgent, dataset: train_types.Dataset, metrics: nnx.MultiMetric
+        agent: BaseAgent, dataset: train_types.Dataset, loss_metrics: nnx.MultiMetric
     ) -> chex.Numeric:
-        """calculate loss and log to metrics"""
+        """calculate loss and log to loss_metrics"""
         dists = agent.get_action_distribution(dataset.observation, dataset.action_mask)
         
         """actor loss"""
@@ -135,7 +137,7 @@ def update_agent(
         # Regularization term (alpha * mag_kl)
         reg_term = mag_coef * mag_kl
 
-        metrics.update(
+        loss_metrics.update(
             actor_loss = actor_loss,
             ppo_loss = ppo_loss,
             critic_loss=critic_loss,
@@ -194,7 +196,7 @@ def update_agent(
     def update_batch(carry: UpdateState, batch: train_types.Dataset):
         """Update the agent for a single batch"""
         # compute the gradient
-        grad = nnx.grad(calculate_n_log_loss)(carry.agent, batch, carry.metrics)
+        grad = nnx.grad(calculate_n_log_loss)(carry.agent, batch, carry.loss_metrics)
 
         # compute gradient norms for policy and regularization separately
         grad_policy = nnx.grad(calculate_ppo_loss_only)(carry.agent, batch)
@@ -207,7 +209,7 @@ def update_agent(
         ratio_grad_norms = grad_norm_policy / jnp.maximum(grad_norm_reg, 1e-10)
 
         # log gradient norm metrics
-        carry.metrics.update(
+        carry.grad_metrics.update(
             grad_norm_policy=grad_norm_policy,
             grad_norm_reg=grad_norm_reg,
             ratio_grad_norms=ratio_grad_norms
@@ -243,13 +245,14 @@ def update_agent(
     carry = UpdateState(
         agent=agent,
         optimizer=optimizer,
-        metrics=metrics,
+        loss_metrics=loss_metrics,
+        grad_metrics=grad_metrics,
         key=key
     )
 
     # perform ppo update for given epoch
     carry, _ = nnx.scan(update_epoch, length=num_ppo_epoch)(carry, None)
     carry: UpdateState = carry # for type hint
-    
 
-    return carry.agent, carry.optimizer, carry.metrics
+
+    return carry.agent, carry.optimizer, carry.loss_metrics, carry.grad_metrics

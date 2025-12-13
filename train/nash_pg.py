@@ -85,7 +85,8 @@ class LearnerState:
     last_timestep: env_types.TimeStep
     agent: BaseAgent
     optimizer: nnx.Optimizer
-    train_metrics: nnx.MultiMetric
+    loss_metrics: nnx.MultiMetric  # Metrics computed during forward pass
+    grad_metrics: nnx.MultiMetric  # Metrics computed during backward pass
     rollout_metrics: nnx.MultiMetric
     mag_agent: Optional[BaseAgent] # use for regularization
     alpha_t: float # current regularization coefficient (for warmup schedule)
@@ -120,12 +121,13 @@ def single_training_step(
 
     """perform ppo update"""
     learner_state.key, update_key = jax.random.split(learner_state.key)
-    learner_state.agent, learner_state.optimizer, learner_state.train_metrics = update_agent(
+    learner_state.agent, learner_state.optimizer, learner_state.loss_metrics, learner_state.grad_metrics = update_agent(
         agent = learner_state.agent,
         mag_agent = learner_state.mag_agent,
         optimizer = learner_state.optimizer,
         dataset = dataset,
-        metrics = learner_state.train_metrics,
+        loss_metrics = learner_state.loss_metrics,
+        grad_metrics = learner_state.grad_metrics,
         key = update_key,
         ent_coef = config.algorithm.ent_coef,
         mag_coef = learner_state.alpha_t,  # Use alpha_t from learner_state instead of fixed mag_coef
@@ -157,7 +159,10 @@ def training_step(
 def log_metrics(learner_state: LearnerState, logger: BaseLogger, cur_num_update: int):
     """Log training and rollout metrics"""
 
-    train_metrics = learner_state.train_metrics.compute()
+    # Compute and merge both loss and gradient metrics
+    loss_metrics = learner_state.loss_metrics.compute()
+    grad_metrics = learner_state.grad_metrics.compute()
+    train_metrics = {**loss_metrics, **grad_metrics}  # Merge both dictionaries
     rollout_metrics = learner_state.rollout_metrics.compute()
 
     # Add alpha_t to train metrics for tracking the warmup schedule
@@ -175,7 +180,8 @@ def log_metrics(learner_state: LearnerState, logger: BaseLogger, cur_num_update:
     }
     logger.log_rollout_metrics(processed_rollout_metrics, cur_num_update)
 
-    learner_state.train_metrics.reset()
+    learner_state.loss_metrics.reset()
+    learner_state.grad_metrics.reset()
     learner_state.rollout_metrics.reset()
 
 
@@ -194,7 +200,9 @@ def main(config: DictConfig):
 
     # setup optimizer & metrics
     optimizer = nnx.Optimizer(agent, optax.adamw(config.algorithm.lr, eps=1e-5))
-    train_metrics = nnx.MultiMetric(
+
+    # Split metrics into loss metrics (computed during forward pass) and grad metrics (computed during backward pass)
+    loss_metrics = nnx.MultiMetric(
         actor_loss = nnx.metrics.Average("actor_loss"),
         ppo_loss = nnx.metrics.Average("ppo_loss"),
         entropy = nnx.metrics.Average("entropy"),
@@ -202,11 +210,13 @@ def main(config: DictConfig):
         approx_kl = nnx.metrics.Average("approx_kl"),
         mag_kl = nnx.metrics.Average("mag_kl"),
         reg_term = nnx.metrics.Average("reg_term"),
+        clip_frac = nnx.metrics.Average("clip_frac"),
+        explained_var = nnx.metrics.Average("explained_var"),
+    )
+    grad_metrics = nnx.MultiMetric(
         grad_norm_policy = nnx.metrics.Average("grad_norm_policy"),
         grad_norm_reg = nnx.metrics.Average("grad_norm_reg"),
         ratio_grad_norms = nnx.metrics.Average("ratio_grad_norms"),
-        clip_frac = nnx.metrics.Average("clip_frac"),
-        explained_var = nnx.metrics.Average("explained_var"),
     )
     rollout_metrics = nnx.MultiMetric(
         inverse_eps_len = nnx.metrics.Average("inverse_eps_len"),
@@ -232,7 +242,8 @@ def main(config: DictConfig):
         last_timestep=init_timestep,
         agent=agent,
         optimizer=optimizer,
-        train_metrics=train_metrics,
+        loss_metrics=loss_metrics,
+        grad_metrics=grad_metrics,
         rollout_metrics=rollout_metrics,
         mag_agent=nnx.clone(agent), # init as the same
         alpha_t=initial_alpha_t,
