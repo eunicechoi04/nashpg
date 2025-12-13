@@ -80044,7 +80044,263 @@
       "alpha_t": 0.20000000298023224
     }
   ],
-  "eval": [],
+  "eval": [
+    {
+      "step": 0,
+      "outer_loop_step": 0,
+      "exploitability": 0.10790106654167175
+    },
+    {
+      "step": 1000,
+      "outer_loop_step": 1,
+      "exploitability": 0.026454927399754524
+    },
+    {
+      "step": 2000,
+      "outer_loop_step": 2,
+      "exploitability": 0.011131606064736843
+    },
+    {
+      "step": 3000,
+      "outer_loop_step": 3,
+      "exploitability": 0.008574090898036957
+    },
+    {
+      "step": 4000,
+      "outer_loop_step": 4,
+      "exploitability": 0.00557081401348114
+    },
+    {
+      "step": 5000,
+      "outer_loop_step": 5,
+      "exploitability": 0.008636124432086945
+    },
+    {
+      "step": 6000,
+      "outer_loop_step": 6,
+      "exploitability": 0.01551898941397667
+    },
+    {
+      "step": 7000,
+      "outer_loop_step": 7,
+      "exploitability": 0.008949004113674164
+    },
+    {
+      "step": 8000,
+      "outer_loop_step": 8,
+      "exploitability": 0.014841724187135696
+    },
+    {
+      "step": 9000,
+      "outer_loop_step": 9,
+      "exploitability": 0.005696611478924751
+    },
+    {
+      "step": 10000,
+      "outer_loop_step": 10,
+      "exploitability": 0.0030160043388605118
+    },
+    {
+      "step": 11000,
+      "outer_loop_step": 11,
+      "exploitability": 0.0033336495980620384
+    },
+    {
+      "step": 12000,
+      "outer_loop_step": 12,
+      "exploitability": 0.004408661741763353
+    },
+    {
+      "step": 13000,
+      "outer_loop_step": 13,
+      "exploitability": 0.005855942610651255
+    },
+    {
+      "step": 14000,
+      "outer_loop_step": 14,
+      "exploitability": 0.0025960728526115417
+    },
+    {
+      "step": 15000,
+      "outer_loop_step": 15,
+      "exploitability": 0.0020533239003270864
+    },
+    {
+      "step": 16000,
+      "outer_loop_step": 16,
+      "exploitability": 0.0016919481568038464
+    },
+    {
+      "step": 17000,
+      "outer_loop_step": 17,
+      "exploitability": 0.009963520802557468
+    },
+    {
+      "step": 18000,
+      "outer_loop_step": 18,
+      "exploitability": 0.002316035097464919
+    },
+    {
+      "step": 19000,
+      "outer_loop_step": 19,
+      "exploitability": 0.006976183969527483
+    },
+    {
+      "step": 20000,
+      "outer_loop_step": 20,
+      "exploitability": 0.008232446387410164
+    },
+    {
+      "step": 21000,
+      "outer_loop_step": 21,
+      "exploitability": 0.002077896846458316
+    },
+    {
+      "step": 22000,
+      "outer_loop_step": 22,
+      "exploitability": 0.004863189533352852
+    },
+    {
+      "step": 23000,
+      "outer_loop_step": 23,
+      "exploitability": 0.010254804976284504
+    },
+    {
+      "step": 24000,
+      "outer_loop_step": 24,
+      "exploitability": 0.0015980444150045514
+    },
+    {
+      "step": 25000,
+      "outer_loop_step": 25,
+      "exploitability": 0.0015930213266983628
+    },
+    {
+      "step": 26000,
+      "outer_loop_step": 26,
+      "exploitability": 0.008958503603935242
+    },
+    {
+      "step": 27000,
+      "outer_loop_step": 27,
+      "exploitability": 0.007006866857409477
+    },
+    {
+      "step": 28000,
+      "outer_loop_step": 28,
+      "exploitability": 0.0021179160103201866
+    },
+    {
+      "step": 29000,
+      "outer_loop_step": 29,
+      "exploitability": 0.002500710543245077
+    },
+    {
+      "step": 30000,
+      "outer_loop_step": 30,
+      "exploitability": 0.013701443560421467
+    },
+    {
+      "step": 31000,
+      "outer_loop_step": 31,
+      "exploitability": 0.018516354262828827
+    },
+    {
+      "step": 32000,
+      "outer_loop_step": 32,
+      "exploitability": 0.01926547847688198
+    },
+    {
+      "step": 33000,
+      "outer_loop_step": 33,
+      "exploitability": 0.01335428562015295
+    },
+    {
+      "step": 34000,
+      "outer_loop_step": 34,
+      "exploitability": 0.004565278999507427
+    },
+    {
+      "step": 35000,
+      "outer_loop_step": 35,
+      "exploitability": 0.005754238460212946
+    },
+    {
+      "step": 36000,
+      "outer_loop_step": 36,
+      "exploitability": 0.0035803201608359814
+    },
+    {
+      "step": 37000,
+      "outer_loop_step": 37,
+      "exploitability": 0.003003127174451947
+    },
+    {
+      "step": 38000,
+      "outer_loop_step": 38,
+      "exploitability": 0.0018850985215976834
+    },
+    {
+      "step": 39000,
+      "outer_loop_step": 39,
+      "exploitability": 0.0033984084147959948
+    },
+    {
+      "step": 40000,
+      "outer_loop_step": 40,
+      "exploitability": 0.01203643437474966
+    },
+    {
+      "step": 41000,
+      "outer_loop_step": 41,
+      "exploitability": 0.00012333922495599836
+    },
+    {
+      "step": 42000,
+      "outer_loop_step": 42,
+      "exploitability": 0.0007703460287302732
+    },
+    {
+      "step": 43000,
+      "outer_loop_step": 43,
+      "exploitability": 0.012050282210111618
+    },
+    {
+      "step": 44000,
+      "outer_loop_step": 44,
+      "exploitability": 0.0036533018574118614
+    },
+    {
+      "step": 45000,
+      "outer_loop_step": 45,
+      "exploitability": 0.0051628160290420055
+    },
+    {
+      "step": 46000,
+      "outer_loop_step": 46,
+      "exploitability": 0.015814196318387985
+    },
+    {
+      "step": 47000,
+      "outer_loop_step": 47,
+      "exploitability": 0.013006535358726978
+    },
+    {
+      "step": 48000,
+      "outer_loop_step": 48,
+      "exploitability": 0.005714696366339922
+    },
+    {
+      "step": 49000,
+      "outer_loop_step": 49,
+      "exploitability": 0.0045408522710204124
+    },
+    {
+      "step": 50000,
+      "outer_loop_step": 50,
+      "exploitability": 0.00039089180063456297
+    }
+  ],
   "rollout": [
     {
       "step": 10,
